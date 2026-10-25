@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TuneBox</title>
+<style>
+:root{--bg:#0e0f13;--card:#181a21;--fg:#f2f3f5;--mut:#9aa0ac;--acc:#2bc5b4}
+@media (prefers-color-scheme:light){:root{--bg:#f6f7f9;--card:#fff;--fg:#14161a;--mut:#667}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px system-ui,sans-serif;padding-bottom:90px}
+header{position:sticky;top:0;display:flex;gap:12px;align-items:center;padding:12px 16px;background:var(--bg);z-index:5}
+h1{font-size:20px;margin:0;color:var(--acc);cursor:pointer}
+input{flex:1;max-width:420px;padding:9px 14px;border-radius:20px;border:1px solid #8884;background:var(--card);color:var(--fg)}
+main{padding:0 16px}h2{margin:20px 0 10px;font-size:17px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px}
+.card{background:var(--card);border-radius:10px;padding:10px;cursor:pointer}
+.card img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;background:#8883}
+.card b,.card small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:6px}small{color:var(--mut)}
+#bar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:12px;align-items:center;padding:10px 16px;background:var(--card);border-top:1px solid #8882}
+#bar img{width:48px;height:48px;border-radius:6px;object-fit:cover;background:#8883}#bar div{min-width:0;flex:0 0 160px}
+audio{flex:1;min-width:0}
+</style></head><body>
+<header><h1 id="logo">TuneBox</h1><input id="q" type="search" placeholder="Search songs…"></header>
+<main id="main"><p style="color:var(--mut)">Loading…</p></main>
+<div id="bar"><img id="art" alt=""><div><b id="t">Nothing playing</b><small id="a"></small></div><audio id="au" controls></audio></div>
+<script>
+const $=id=>document.getElementById(id),main=$('main');let queue=[],cur=-1,seq=0;
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api=async p=>{const r=await fetch('/api'+p);if(!r.ok)throw new Error((await r.json().catch(()=>({}))).message||r.status);return r.json()};
+const songCard=(s,i)=>`<div class="card" data-i="${i}"><img loading="lazy" src="${esc(s.image)}" alt=""><b>${esc(s.title)}</b><small>${esc(s.artist)}</small></div>`;
+function songs(title,list){queue=list;main.innerHTML=`<h2>${esc(title)}</h2><div class="grid">${list.map(songCard).join('')||'<p>No results.</p>'}</div>`}
+function play(i){const s=queue[i];if(!s)return;cur=i;$('au').src=s.stream;$('au').play().catch(()=>{});$('t').textContent=s.title;$('a').textContent=s.artist||'';$('art').src=s.image||''}
+async function home(){try{const d=await api('/home');queue=d.trending;
+main.innerHTML=`<h2>Trending</h2><div class="grid">${d.trending.map(songCard).join('')}</div><h2>Playlists</h2><div class="grid">${d.playlists.map(p=>`<div class="card" data-pl="${esc(p.id)}"><img loading="lazy" src="${esc(p.image)}" alt=""><b>${esc(p.title)}</b><small>${esc(p.owner)} · ${p.count} tracks</small></div>`).join('')}</div>`}
+catch(e){main.innerHTML=`<p>Could not load: ${esc(e.message)}</p>`}}
+main.onclick=async e=>{const c=e.target.closest('.card');if(!c)return;
+if(c.dataset.pl){try{const p=await api('/playlists/'+c.dataset.pl);songs(p.title,p.songs)}catch(x){alert(x.message)}}else play(+c.dataset.i)};
+$('au').onended=()=>play(cur+1);
+$('logo').onclick=home;
+let tm;$('q').oninput=e=>{clearTimeout(tm);const v=e.target.value.trim();if(!v){seq++;return home()}tm=setTimeout(async()=>{const my=++seq;try{const r=await api('/search?q='+encodeURIComponent(v));if(my!==seq)return;songs('Results for “'+v+'”',r.songs)}catch(x){if(my===seq)main.innerHTML=`<p>${esc(x.message)}</p>`}},350)};
+home();
+</script></body></html>
